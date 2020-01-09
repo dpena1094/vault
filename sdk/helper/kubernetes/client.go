@@ -5,27 +5,18 @@ package kubernetes
 // To put or to patch, that is the question.
 // https://kubernetes.io/docs/tasks/run-application/update-api-object-kubectl-patch/
 
-import (
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-)
-
 type Pod struct {
 	Labels map[string]string
 	// TODO more will need to be read in here
 }
 
 func NewLightWeightClient() (LightWeightClient, error) {
-	conf, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-	clientSet, err := kubernetes.NewForConfig(conf)
+	config, err := inClusterConfig()
 	if err != nil {
 		return nil, err
 	}
 	return &lightWeightClient{
-		clientSet:clientSet,
+		config: config,
 	}, nil
 }
 
@@ -36,7 +27,7 @@ type LightWeightClient interface{
 }
 
 type lightWeightClient struct{
-	clientSet *kubernetes.Clientset
+	config *Config
 }
 
 func (c *lightWeightClient) GetPod(namespace, podName string) (*Pod, error) {
