@@ -12,6 +12,7 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/hashicorp/errwrap v1.0.0
+	github.com/hashicorp/go-cleanhttp v0.5.0
 	github.com/hashicorp/go-hclog v0.10.1
 	github.com/hashicorp/go-immutable-radix v1.0.0
 	github.com/hashicorp/go-multierror v1.0.0
