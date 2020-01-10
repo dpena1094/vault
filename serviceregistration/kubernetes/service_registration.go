@@ -26,6 +26,10 @@ func NewServiceRegistration(shutdownCh <-chan struct{}, config map[string]string
 
 	// Perform an initial labelling of Vault as it starts up.
 	namespace := config["namespace"]
+	if namespace == "" {
+		namespace = "default"
+	}
+
 	podName := config["pod_name"]
 	if podName == "" {
 		podName = defaultVaultPodName

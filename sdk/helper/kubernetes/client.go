@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,7 +28,6 @@ func NewLightWeightClient() (LightWeightClient, error) {
 type LightWeightClient interface {
 	// GetPod merely verifies a pod's existence, returning an
 	// error if the pod doesn't exist.
-	// TODO test if this is true.
 	GetPod(namespace, podName string) error
 
 	// UpdatePodTags updates the pod's tags tags to the given ones,
@@ -63,8 +63,8 @@ func (c *lightWeightClient) UpdatePodTags(namespace, podName string, tags ...*Ta
 	var patch []interface{}
 	for _, tag := range tags {
 		patch = append(patch, map[string]string{
-			"op":    "add", // TODO will this overwrite previous values for the tag key, or add to an array?
-			"path":  "/spec/template/metadata/labels/" + tag.Key,
+			"op":    "add",
+			"path":  "/metadata/labels/" + tag.Key,
 			"value": tag.Value,
 		})
 	}
@@ -76,6 +76,7 @@ func (c *lightWeightClient) UpdatePodTags(namespace, podName string, tags ...*Ta
 	if err != nil {
 		return err
 	}
+	req.Header.Set("Content-Type", "application/json-patch+json")
 	return c.do(req, nil)
 }
 
@@ -83,14 +84,20 @@ func (c *lightWeightClient) do(req *http.Request, ptrToReturnObj interface{}) er
 	// Finish setting up a valid request.
 	req.Header.Set("Authorization", "Bearer "+c.config.BearerToken)
 	req.Header.Set("Accept", "application/json")
-	// TODO what about the TLS CA certificate that was set on the config? And other config opts?
+	client := cleanhttp.DefaultClient()
+	client.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs: c.config.CACertPool,
+		},
+	}
 
 	// Execute it.
-	resp, err := cleanhttp.DefaultClient().Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 
+	// TODO retrying, exponential backoff.
 	// Check for success.
 	switch resp.StatusCode {
 	case 200, 201, 202:
