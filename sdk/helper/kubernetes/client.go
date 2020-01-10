@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,19 +10,8 @@ import (
 	"github.com/hashicorp/go-cleanhttp"
 )
 
-const (
-	baseURL = "" // TODO
-	versionedAPIPath = "" // TODO
-)
-
-// Pod is a collection of containers that can run on a host. This resource is created
-// by clients and scheduled onto hosts.
-type Pod struct {
-	ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-}
-
-type ObjectMeta struct {
-	Labels map[string]string `json:"labels,omitempty" protobuf:"bytes,11,rep,name=labels"`
+type Tag struct {
+	Key, Value string
 }
 
 func NewLightWeightClient() (LightWeightClient, error) {
@@ -34,65 +24,64 @@ func NewLightWeightClient() (LightWeightClient, error) {
 	}, nil
 }
 
-type LightWeightClient interface{
-	GetPod(namespace, podName string) (*Pod, error)
-	UpdatePod(namespace string, pod *Pod) error
-	PatchPodTag(namespace, podName, tagKey, tagValue string) error
+type LightWeightClient interface {
+	// GetPod merely verifies a pod's existence, returning an
+	// error if the pod doesn't exist.
+	// TODO test if this is true.
+	GetPod(namespace, podName string) error
+
+	// UpdatePodTags updates the pod's tags tags to the given ones,
+	// overwriting previous values for a given tag key. It does so
+	// non-destructively, or in other words, without tearing down
+	// the pod.
+	// TODO test if this is true.
+	UpdatePodTags(namespace, podName string, tags ...*Tag) error
 }
 
-type lightWeightClient struct{
+type lightWeightClient struct {
 	config *Config
 }
 
-func (c *lightWeightClient) GetPod(namespace, podName string) (*Pod, error) {
+func (c *lightWeightClient) GetPod(namespace, podName string) error {
 	endpoint := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s", namespace, podName)
 	method := http.MethodGet
 
-	req, err := http.NewRequest(method, baseURL+versionedAPIPath+endpoint, nil)
+	req, err := http.NewRequest(method, c.config.Host+endpoint, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	pod := &Pod{}
-	if err := c.do(req, pod); err != nil {
-		return nil, err
+	if err := c.do(req, nil); err != nil {
+		return err
 	}
-	return pod, nil
-}
-
-// https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#patch-pod-v1-core
-func (c *lightWeightClient) UpdatePod(namespace string, pod *Pod) error {
-	// TODO
-	/*
-		if _, err := clientSet.CoreV1().Pods(namespace).Update(pod); err != nil {
-			return nil, err
-		}
-	*/
 	return nil
 }
 
-// https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#patch-pod-v1-core
-func (c *lightWeightClient) PatchPodTag(namespace, podName, tagKey, tagValue string) error {
-	// TODO
-	/*
-		patch := map[string]string{
-			"op":    "add",
-			"path":  "/spec/template/metadata/labels/" + key,
-			"value": sanitizedDebuggingInfo(value),
-		}
-		data, err := json.Marshal([]interface{}{patch})
-		if err != nil {
-			return err
-		}
-		if _, err := r.clientSet.CoreV1().Pods(r.namespace).Patch(r.podName, types.JSONPatchType, data); err != nil {
-			return err
-		}
-	 */
-	return nil
+func (c *lightWeightClient) UpdatePodTags(namespace, podName string, tags ...*Tag) error {
+	endpoint := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s", namespace, podName)
+	method := http.MethodPatch
+
+	var patch []interface{}
+	for _, tag := range tags {
+		patch = append(patch, map[string]string{
+			"op":    "add", // TODO will this overwrite previous values for the tag key, or add to an array?
+			"path":  "/spec/template/metadata/labels/" + tag.Key,
+			"value": tag.Value,
+		})
+	}
+	body, err := json.Marshal(patch)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(method, c.config.Host+endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	return c.do(req, nil)
 }
 
 func (c *lightWeightClient) do(req *http.Request, ptrToReturnObj interface{}) error {
 	// Finish setting up a valid request.
-	req.Header.Set("Authorization", "Bearer " + c.config.BearerToken)
+	req.Header.Set("Authorization", "Bearer "+c.config.BearerToken)
 	req.Header.Set("Accept", "application/json")
 	// TODO what about the TLS CA certificate that was set on the config? And other config opts?
 

@@ -37,7 +37,7 @@ func inClusterConfig() (*Config, error) {
 	tlsClientConfig := TLSClientConfig{}
 
 	if _, err := newPool(rootCAFile); err != nil {
-			return nil, fmt.Errorf("expected to load root CA config from %s, but got err: %v", rootCAFile, err)
+		return nil, fmt.Errorf("expected to load root CA config from %s, but got err: %v", rootCAFile, err)
 	} else {
 		tlsClientConfig.CAFile = rootCAFile
 	}
@@ -47,7 +47,7 @@ func inClusterConfig() (*Config, error) {
 		Host:            "https://" + net.JoinHostPort(host, port),
 		TLSClientConfig: tlsClientConfig,
 		BearerToken:     string(token),
-		BearerTokenFile: tokenFile,
+		BearerTokenFile: tokenFile, // TODO should I re-check this periodically? Or lazily on a bad response?
 	}, nil
 }
 

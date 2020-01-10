@@ -30,27 +30,28 @@ func NewServiceRegistration(shutdownCh <-chan struct{}, config map[string]string
 	if podName == "" {
 		podName = defaultVaultPodName
 	}
-	pod, err := client.GetPod(namespace, podName)
-	if err != nil {
+
+	// Verify that the pod exists and our configuration looks good.
+	if err := client.GetPod(namespace, podName); err != nil {
 		return nil, err
 	}
-	for label, value := range map[string]string{
-		labelVaultVersion: state.VaultVersion,
-		labelActive:       toString(state.IsActive),
-		labelSealed:       toString(state.IsSealed),
-		labelPerfStandby:  toString(state.IsPerformanceStandby),
-		labelInitialized:  toString(state.IsInitialized),
-	} {
-		pod.Labels[label] = value
+
+	// Label the pod with our initial values.
+	tags := []*kubeHlpr.Tag{
+		{Key: labelVaultVersion, Value: state.VaultVersion},
+		{Key: labelActive, Value: toString(state.IsActive)},
+		{Key: labelSealed, Value: toString(state.IsSealed)},
+		{Key: labelPerfStandby, Value: toString(state.IsPerformanceStandby)},
+		{Key: labelInitialized, Value: toString(state.IsInitialized)},
 	}
-	if err := client.UpdatePod(namespace, pod); err != nil {
+	if err := client.UpdatePodTags(namespace, podName, tags...); err != nil {
 		return nil, err
 	}
 	registration := &serviceRegistration{
 		logger:    logger,
 		podName:   podName,
 		namespace: namespace,
-		client: client,
+		client:    client,
 	}
 
 	// Run a background goroutine to leave labels in the final state we'd like
@@ -62,43 +63,48 @@ func NewServiceRegistration(shutdownCh <-chan struct{}, config map[string]string
 type serviceRegistration struct {
 	logger             log.Logger
 	namespace, podName string
-	client kubeHlpr.LightWeightClient
+	client             kubeHlpr.LightWeightClient
 }
 
 func (r *serviceRegistration) NotifyActiveStateChange(isActive bool) error {
-	return r.client.PatchPodTag(r.namespace, r.podName, labelActive, toString(isActive))
+	return r.client.UpdatePodTags(r.namespace, r.podName, &kubeHlpr.Tag{
+		Key:   labelActive,
+		Value: toString(isActive),
+	})
 }
 
 func (r *serviceRegistration) NotifySealedStateChange(isSealed bool) error {
-	return r.client.PatchPodTag(r.namespace, r.podName, labelSealed, toString(isSealed))
+	return r.client.UpdatePodTags(r.namespace, r.podName, &kubeHlpr.Tag{
+		Key:   labelSealed,
+		Value: toString(isSealed),
+	})
 }
 
 func (r *serviceRegistration) NotifyPerformanceStandbyStateChange(isStandby bool) error {
-	return r.client.PatchPodTag(r.namespace, r.podName, labelPerfStandby, toString(isStandby))
+	return r.client.UpdatePodTags(r.namespace, r.podName, &kubeHlpr.Tag{
+		Key:   labelPerfStandby,
+		Value: toString(isStandby),
+	})
 }
 
 func (r *serviceRegistration) NotifyInitializedStateChange(isInitialized bool) error {
-	return r.client.PatchPodTag(r.namespace, r.podName, labelInitialized, toString(isInitialized))
+	return r.client.UpdatePodTags(r.namespace, r.podName, &kubeHlpr.Tag{
+		Key:   labelInitialized,
+		Value: toString(isInitialized),
+	})
 }
 
 func (r *serviceRegistration) onShutdown(shutdownCh <-chan struct{}) {
 	<-shutdownCh
-	pod, err := r.client.GetPod(r.namespace, r.podName)
-	if err != nil {
-		if r.logger.IsWarn() {
-			r.logger.Warn(fmt.Sprintf("unable to get pod name %q in namespace %q on shutdown: %s", r.podName, r.namespace, err))
-		}
-		return
+
+	// Label the pod with the values we want to leave behind after shutdown.
+	tags := []*kubeHlpr.Tag{
+		{Key: labelActive, Value: toString(false)},
+		{Key: labelSealed, Value: toString(true)},
+		{Key: labelPerfStandby, Value: toString(false)},
+		{Key: labelInitialized, Value: toString(false)},
 	}
-	for label, value := range map[string]string{
-		labelActive:      toString(false),
-		labelSealed:      toString(true),
-		labelPerfStandby: toString(false),
-		labelInitialized: toString(false),
-	} {
-		pod.Labels[label] = value
-	}
-	if err := r.client.UpdatePod(r.namespace, pod); err != nil {
+	if err := r.client.UpdatePodTags(r.namespace, r.podName, tags...); err != nil {
 		if r.logger.IsWarn() {
 			r.logger.Warn(fmt.Sprintf("unable to set final status on pod name %q in namespace %q on shutdown: %s", r.podName, r.namespace, err))
 		}

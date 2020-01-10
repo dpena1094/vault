@@ -162,7 +162,7 @@ var (
 	}
 
 	serviceRegistrations = map[string]sr.Factory{
-		"consul": csr.NewServiceRegistration,
+		"consul":     csr.NewServiceRegistration,
 		"kubernetes": ksr.NewServiceRegistration,
 	}
 )
