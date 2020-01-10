@@ -603,7 +603,7 @@ func (c *Client) ClearToken() {
 }
 
 // Headers gets the current set of headers used for requests. This returns a
-// copy; to modify it call AddHeader or SetHeaders.
+// copy; to modify it make modifications locally and use SetHeaders.
 func (c *Client) Headers() http.Header {
 	c.modifyLock.RLock()
 	defer c.modifyLock.RUnlock()
@@ -622,19 +622,11 @@ func (c *Client) Headers() http.Header {
 	return ret
 }
 
-// AddHeader allows a single header key/value pair to be added
-// in a race-safe fashion.
-func (c *Client) AddHeader(key, value string) {
-	c.modifyLock.Lock()
-	defer c.modifyLock.Unlock()
-	c.headers.Add(key, value)
-}
-
-// SetHeaders clears all previous headers and uses only the given
-// ones going forward.
+// SetHeaders sets the headers to be used for future requests.
 func (c *Client) SetHeaders(headers http.Header) {
 	c.modifyLock.Lock()
 	defer c.modifyLock.Unlock()
+
 	c.headers = headers
 }
 
