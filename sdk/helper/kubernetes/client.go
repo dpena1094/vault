@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/hashicorp/go-cleanhttp"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type Tag struct {
 	Key, Value string
@@ -34,7 +37,6 @@ type LightWeightClient interface {
 	// overwriting previous values for a given tag key. It does so
 	// non-destructively, or in other words, without tearing down
 	// the pod.
-	// TODO test if this is true.
 	UpdatePodTags(namespace, podName string, tags ...*Tag) error
 }
 
@@ -97,11 +99,15 @@ func (c *lightWeightClient) do(req *http.Request, ptrToReturnObj interface{}) er
 		return err
 	}
 
-	// TODO retrying, exponential backoff.
 	// Check for success.
+	// Note - someday we may want to implement retrying and exponential backoff with jitter
+	// here, but on the first iteration we're going with a naive approach because we don't
+	// know whether it'll be needed.
 	switch resp.StatusCode {
 	case 200, 201, 202:
 		// Pass.
+	case 404:
+		return ErrNotFound
 	default:
 		return fmt.Errorf("unexpected status code: %s", sanitizedDebuggingInfo(req, resp))
 	}

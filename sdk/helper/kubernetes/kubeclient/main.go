@@ -5,7 +5,7 @@ package main
 // The intention is that the binary can be built and dropped into
 // a Kube environment like this:
 // https://kubernetes.io/docs/tasks/debug-application-cluster/get-shell-running-container/
-// Then, commands can ge run to test its API calls.
+// Then, commands can be run to test its API calls.
 // The above commands are intended to be run inside an instance of
 // minikube that has been started.
 // After building this binary, place it in the container like this:
